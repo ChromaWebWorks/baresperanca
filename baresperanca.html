@@ -1,0 +1,688 @@
+<html><head><base href="https://esperanca-bar.com/"><title>Sistema Integrado - Bar Esperança</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.3.2/socket.io.js"></script>
+<style>
+  :root {
+    --primary-color: #2c3e50;
+    --secondary-color: #34495e;
+    --accent-color: #e74c3c;
+    --background-color: #ecf0f1;
+    --text-color: #333;
+  }
+  * {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  #app {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 10px;
+  }
+  .header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 12px;
+    text-align: center;
+    margin-bottom: 15px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+  h1 {
+    font-size: 20px;
+    margin: 0;
+  }
+  h2 {
+    font-size: 18px;
+    margin-top: 0;
+    color: var(--primary-color);
+  }
+  .card {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid #ddd;
+  }
+  th {
+    background-color: var(--secondary-color);
+    color: white;
+  }
+  .btn {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-right: 5px;
+  }
+  .btn:hover {
+    background-color: #c0392b;
+  }
+  .tabs {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    background-color: var(--secondary-color);
+    color: white;
+    cursor: pointer;
+    border-radius: 4px 4px 0 0;
+    margin: 0 2px;
+  }
+  .tab.active {
+    background-color: var(--primary-color);
+  }
+  .form-group {
+    margin-bottom: 15px;
+  }
+  label {
+    display: block;
+    margin-bottom: 5px;
+  }
+  input, select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  @media (max-width: 480px) {
+    .card {
+      padding: 8px;
+    }
+    h2 {
+      font-size: 14px;
+    }
+    table {
+      font-size: 11px;
+    }
+    th, td {
+      padding: 4px;
+    }
+    .btn {
+      font-size: 11px;
+      padding: 3px 6px;
+    }
+    .tab {
+      font-size: 11px;
+      padding: 6px 3px;
+    }
+    .form-group {
+      margin-bottom: 10px;
+    }
+    label {
+      font-size: 12px;
+    }
+    input, select {
+      font-size: 12px;
+      padding: 6px;
+    }
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div class="header">
+      <h1>Sistema Integrado - Bar Esperança</h1>
+    </div>
+
+    <div class="tabs">
+      <div :class="['tab', { active: activeTab === 'reservations' }]" @click="activeTab = 'reservations'">Reservas</div>
+      <div :class="['tab', { active: activeTab === 'waitlist' }]" @click="activeTab = 'waitlist'">Fila de Espera</div>
+      <div :class="['tab', { active: activeTab === 'staff' }]" @click="activeTab = 'staff'">Gerenciar Equipe</div>
+      <div :class="['tab', { active: activeTab === 'commission' }]" @click="activeTab = 'commission'">Comissões</div>
+    </div>
+
+    <div v-if="activeTab === 'reservations'" class="card">
+      <h2>Reservas Online (Somente noites de segunda a quinta, limite de 5 por dia)</h2>
+      <form @submit.prevent="submitReservation">
+        <div class="form-group">
+          <label for="name">Nome:</label>
+          <input type="text" id="name" v-model="newReservation.name" required>
+        </div>
+        <div class="form-group">
+          <label for="date">Data:</label>
+          <input type="date" id="date" v-model="newReservation.date" required>
+        </div>
+        <div class="form-group">
+          <label for="time">Hora (após 18:00):</label>
+          <input type="time" id="time" v-model="newReservation.time" required min="18:00" max="23:59">
+        </div>
+        <div class="form-group">
+          <label for="partySize">Número de Pessoas:</label>
+          <input type="number" id="partySize" v-model="newReservation.partySize" required min="1">
+        </div>
+        <div class="form-group">
+          <label for="area">Área:</label>
+          <select id="area" v-model="newReservation.area" required>
+            <option value="ground">Térreo</option>
+            <option value="middle">Andar do Meio</option>
+            <option value="rooftop">Rooftop</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="phone">Telefone:</label>
+          <input type="tel" id="phone" v-model="newReservation.phone" required>
+        </div>
+        <button type="submit" class="btn">Fazer Reserva</button>
+      </form>
+      
+      <h3>Reservas Atuais ({{ reservations.length }} / {{ reservationLimit }})</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Data</th>
+              <th>Hora</th>
+              <th>Pessoas</th>
+              <th>Área</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="reservation in reservations" :key="reservation.id">
+              <td>{{ reservation.name }}</td>
+              <td>{{ formatDate(reservation.date) }}</td>
+              <td>{{ reservation.time }}</td>
+              <td>{{ reservation.partySize }}</td>
+              <td>{{ getAreaName(reservation.area) }}</td>
+              <td>{{ reservation.status }}</td>
+              <td>
+                <button class="btn" @click="confirmReservation(reservation)">Confirmar</button>
+                <button class="btn" @click="cancelReservation(reservation)">Cancelar</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div v-if="activeTab === 'waitlist'" class="card">
+      <h2>Fila de Espera Online</h2>
+      <form @submit.prevent="addToWaitlist">
+        <div class="form-group">
+          <label for="waitlistName">Nome:</label>
+          <input type="text" id="waitlistName" v-model="newWaitlistEntry.name" required>
+        </div>
+        <div class="form-group">
+          <label for="waitlistPartySize">Número de Pessoas:</label>
+          <input type="number" id="waitlistPartySize" v-model="newWaitlistEntry.partySize" required min="1">
+        </div>
+        <div class="form-group">
+          <label for="waitlistPhone">Telefone:</label>
+          <input type="tel" id="waitlistPhone" v-model="newWaitlistEntry.phone" required>
+        </div>
+        <button type="submit" class="btn">Entrar na Fila</button>
+      </form>
+      
+      <h3>Fila Atual</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Posição</th>
+              <th>Nome</th>
+              <th>Pessoas</th>
+              <th>Telefone</th>
+              <th>Tempo de Espera</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(entry, index) in waitlist" :key="entry.id">
+              <td>{{ index + 1 }}</td>
+              <td>{{ entry.name }}</td>
+              <td>{{ entry.partySize }}</td>
+              <td>{{ entry.phone }}</td>
+              <td>{{ entry.waitTime }} min</td>
+              <td>
+                <button class="btn" @click="seatParty(entry)">Acomodar</button>
+                <button class="btn" @click="removeFromWaitlist(entry)">Remover</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div v-if="activeTab === 'staff'" class="card">
+      <h2>{{ editingStaff ? 'Editar Funcionário' : 'Adicionar Novo Funcionário' }}</h2>
+      <form @submit.prevent="editingStaff ? updateStaffMember() : addStaffMember()">
+        <div class="form-group">
+          <label for="staffName">Nome:</label>
+          <input type="text" id="staffName" v-model="newStaffMember.name" required>
+        </div>
+        <div class="form-group">
+          <label for="staffRole">Função:</label>
+          <select id="staffRole" v-model="newStaffMember.role" required>
+            <option value="waiter">Garçom</option>
+            <option value="busser">Cumim</option>
+            <option value="other">Outro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="staffSection">Seção:</label>
+          <input type="text" id="staffSection" v-model="newStaffMember.section">
+        </div>
+        <div class="form-group">
+          <label for="staffDayOff">Dia de Folga:</label>
+          <select id="staffDayOff" v-model="newStaffMember.dayOff" required>
+            <option value="Segunda">Segunda</option>
+            <option value="Terça">Terça</option>
+            <option value="Quarta">Quarta</option>
+            <option value="Quinta">Quinta</option>
+            <option value="Sexta">Sexta</option>
+            <option value="Sábado">Sábado</option>
+            <option value="Domingo">Domingo</option>
+          </select>
+        </div>
+        <button type="submit" class="btn">{{ editingStaff ? 'Atualizar' : 'Adicionar' }} Funcionário</button>
+        <button type="button" class="btn" v-if="editingStaff" @click="cancelEdit">Cancelar</button>
+      </form>
+      
+      <h3>Equipe Atual</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Função</th>
+              <th>Seção</th>
+              <th>Dia de Folga</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="member in staff" :key="member.id">
+              <td>{{ member.name }}</td>
+              <td>{{ getRoleName(member.role) }}</td>
+              <td>{{ member.section }}</td>
+              <td>{{ member.dayOff }}</td>
+              <td>{{ member.status }}</td>
+              <td>
+                <button class="btn" @click="toggleStaffStatus(member)">
+                  {{ member.status === 'Ativo' ? 'Folga' : 'Ativar' }}
+                </button>
+                <button class="btn" @click="editStaffMember(member)">Editar</button>
+                <button class="btn" @click="removeStaffMember(member)">Remover</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div v-if="activeTab === 'commission'" class="card">
+      <h2>Calculadora de Comissões</h2>
+      <form @submit.prevent="calculateCommission">
+        <div class="form-group">
+          <label for="commissionDate">Data:</label>
+          <input type="date" id="commissionDate" v-model="commissionData.date" required>
+        </div>
+        <div class="form-group">
+          <label for="totalCommission">Total de Comissões:</label>
+          <input type="number" id="totalCommission" v-model="commissionData.totalCommission" required min="0" step="0.01">
+        </div>
+        <button type="submit" class="btn">Calcular Comissões</button>
+      </form>
+      
+      <h3>Comissões Calculadas</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Função</th>
+              <th>Comissão</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="commission in calculatedCommissions" :key="commission.id">
+              <td>{{ commission.name }}</td>
+              <td>{{ getRoleName(commission.role) }}</td>
+              <td>R$ {{ commission.amount.toFixed(2) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <button class="btn" @click="printCommissions">Imprimir Comissões</button>
+    </div>
+  </div>
+
+  <script>
+    new Vue({
+      el: '#app',
+      data: {
+        activeTab: 'reservations',
+        reservations: [],
+        waitlist: [],
+        staff: [],
+        newReservation: {
+          name: '',
+          date: '',
+          time: '',
+          partySize: '',
+          area: '',
+          phone: ''
+        },
+        newWaitlistEntry: {
+          name: '',
+          partySize: '',
+          phone: ''
+        },
+        newStaffMember: {
+          name: '',
+          role: '',
+          section: '',
+          dayOff: ''
+        },
+        editingStaff: null,
+        commissionData: {
+          totalCommission: 0,
+          date: ''
+        },
+        calculatedCommissions: [],
+        reservationLimit: 5,
+        reservationDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday'],
+      },
+      created() {
+        this.loadData();
+        setInterval(this.loadData, 60000);
+        setInterval(this.cleanupExpiredReservations, 86400000);
+        setInterval(this.rotateWaiterSections, 86400000);
+        this.initializeSocket();
+      },
+      methods: {
+        loadData() {
+          this.reservations = JSON.parse(localStorage.getItem('reservations')) || [];
+          this.waitlist = JSON.parse(localStorage.getItem('waitlist')) || [];
+          this.staff = JSON.parse(localStorage.getItem('staff')) || [];
+        },
+        initializeSocket() {
+          const socket = io('https://esperanca-bar.com');
+          socket.on('updateWaitlist', (updatedWaitlist) => {
+            this.waitlist = updatedWaitlist;
+          });
+        },
+        formatDate(date) {
+          return moment(date).format('DD/MM/YYYY');
+        },
+        getAreaName(area) {
+          const areas = {
+            ground: 'Térreo',
+            middle: 'Andar do Meio',
+            rooftop: 'Rooftop'
+          };
+          return areas[area] || area;
+        },
+        getRoleName(role) {
+          const roles = {
+            waiter: 'Garçom',
+            busser: 'Cumim',
+            other: 'Outro'
+          };
+          return roles[role] || role;
+        },
+        submitReservation() {
+          const reservationDate = moment(this.newReservation.date);
+          const reservationTime = moment(this.newReservation.time, 'HH:mm');
+          const isEvening = reservationTime.hours() >= 18;
+          const dayOfWeek = reservationDate.format('dddd');
+          const existingReservations = this.reservations.filter(r => 
+            moment(r.date).isSame(reservationDate, 'day')
+          );
+
+          if (
+            this.reservationDays.includes(dayOfWeek) &&
+            isEvening &&
+            existingReservations.length < this.reservationLimit
+          ) {
+            const newRes = {
+              id: Date.now(),
+              ...this.newReservation,
+              status: 'Confirmada' // Automatically confirm
+            };
+            this.reservations.push(newRes);
+            this.updateLocalStorage();
+            this.sendReservationConfirmation(newRes);
+            this.newReservation = { name: '', date: '', time: '', partySize: '', area: '', phone: '' };
+            alert('Reserva confirmada automaticamente!');
+          } else {
+            alert('Desculpe, não foi possível fazer a reserva. Verifique se é de segunda a quinta, após as 18h, e se ainda há vagas disponíveis.');
+          }
+        },
+        sendReservationConfirmation(reservation) {
+          console.log(`Enviando SMS para ${reservation.phone}:`);
+          console.log(`Sua reserva para ${reservation.partySize} pessoas está confirmada.`);
+          console.log(`Data: ${this.formatDate(reservation.date)} às ${reservation.time}`);
+          console.log('Por favor, chegue até às 19h. Após este horário, a reserva será cancelada.');
+        },
+        confirmReservation(reservation) {
+          reservation.status = 'Confirmada';
+          this.updateLocalStorage();
+        },
+        cancelReservation(reservation) {
+          const index = this.reservations.findIndex(r => r.id === reservation.id);
+          if (index !== -1) {
+            this.reservations.splice(index, 1);
+            this.updateLocalStorage();
+          }
+        },
+        addToWaitlist() {
+          const newEntry = {
+            id: Date.now(),
+            ...this.newWaitlistEntry,
+            waitTime: 0
+          };
+          this.waitlist.push(newEntry);
+          this.updateLocalStorage();
+          this.newWaitlistEntry = { name: '', partySize: '', phone: '' };
+          this.updateWaitTimes();
+        },
+        seatParty(entry) {
+          const index = this.waitlist.findIndex(e => e.id === entry.id);
+          if (index !== -1) {
+            this.waitlist.splice(index, 1);
+            this.updateLocalStorage();
+            this.updateWaitTimes();
+            this.sendSeatingAlert(entry);
+            alert(`Por favor, chame o cliente ${entry.name} para a mesa.`);
+          }
+        },
+        sendSeatingAlert(entry) {
+          console.log(`Enviando SMS para ${entry.phone}:`);
+          console.log(`Olá ${entry.name}, sua mesa está pronta! Por favor, dirija-se ao Bar Esperança.`);
+        },
+        removeFromWaitlist(entry) {
+          const index = this.waitlist.findIndex(e => e.id === entry.id);
+          if (index !== -1) {
+            this.waitlist.splice(index, 1);
+            this.updateLocalStorage();
+            this.updateWaitTimes();
+          }
+        },
+        updateWaitTimes() {
+          this.waitlist.forEach((entry, index) => {
+            entry.waitTime = index * 15; // Estimativa simples: 15 minutos por grupo
+          });
+          this.updateLocalStorage();
+        },
+        editStaffMember(member) {
+          this.editingStaff = { ...member };
+          this.newStaffMember = { ...member };
+        },
+        updateStaffMember() {
+          const index = this.staff.findIndex(m => m.id === this.editingStaff.id);
+          if (index !== -1) {
+            this.staff[index] = { ...this.newStaffMember, id: this.editingStaff.id };
+            this.updateLocalStorage();
+            this.cancelEdit();
+          }
+        },
+        cancelEdit() {
+          this.editingStaff = null;
+          this.newStaffMember = { name: '', role: '', section: '', dayOff: '' };
+        },
+        addStaffMember() {
+          if (this.editingStaff) {
+            this.updateStaffMember();
+          } else {
+            const newMember = {
+              id: Date.now(),
+              ...this.newStaffMember,
+              status: 'Ativo'
+            };
+            this.staff.push(newMember);
+            this.updateLocalStorage();
+            this.newStaffMember = { name: '', role: '', section: '', dayOff: '' };
+          }
+        },
+        toggleStaffStatus(member) {
+          member.status = member.status === 'Ativo' ? 'Folga' : 'Ativo';
+          this.updateLocalStorage();
+        },
+        removeStaffMember(member) {
+          const index = this.staff.findIndex(m => m.id === member.id);
+          if (index !== -1) {
+            this.staff.splice(index, 1);
+            this.updateLocalStorage();
+          }
+        },
+        calculateCommission() {
+          const totalCommission = parseFloat(this.commissionData.totalCommission);
+          const commissionDate = moment(this.commissionData.date);
+
+          // Filter out staff members who are on their day off
+          const activeStaff = this.staff.filter(member => {
+            return member.status === 'Ativo' && member.dayOff !== commissionDate.format('dddd');
+          });
+
+          const fullCommissionStaff = activeStaff.filter(member => member.role === 'waiter');
+          const halfCommissionStaff = activeStaff.filter(member => member.role === 'busser');
+          const quarterCommissionStaff = activeStaff.filter(member => member.role === 'other');
+
+          const fullCommissionCount = fullCommissionStaff.length;
+          const halfCommissionCount = halfCommissionStaff.length;
+          const quarterCommissionCount = quarterCommissionStaff.length;
+
+          const totalShares = fullCommissionCount + (halfCommissionCount * 0.5) + (quarterCommissionCount * 0.25);
+          const shareValue = totalCommission / totalShares;
+
+          this.calculatedCommissions = [
+            ...fullCommissionStaff.map(member => ({
+              id: member.id,
+              name: member.name,
+              role: member.role,
+              amount: shareValue,
+              date: this.commissionData.date
+            })),
+            ...halfCommissionStaff.map(member => ({
+              id: member.id,
+              name: member.name,
+              role: member.role,
+              amount: shareValue * 0.5,
+              date: this.commissionData.date
+            })),
+            ...quarterCommissionStaff.map(member => ({
+              id: member.id,
+              name: member.name,
+              role: member.role,
+              amount: shareValue * 0.25,
+              date: this.commissionData.date
+            }))
+          ];
+        },
+        printCommissions() {
+          const printWindow = window.open('', '_blank');
+          let printContent = '<pre>\n';
+          
+          this.calculatedCommissions.forEach(comm => {
+            printContent += `\n\n${comm.name} (${this.getRoleName(comm.role)})`;
+            printContent += `\nData: ${this.formatDate(comm.date)}`;
+            printContent += `\nR$ ${comm.amount.toFixed(2)}`;
+            printContent += '\n----------------------------------------';
+          });
+          
+          printContent += '\n</pre>';
+          printWindow.document.write(printContent);
+          printWindow.document.close();
+          printWindow.print();
+        },
+        updateLocalStorage() {
+          localStorage.setItem('reservations', JSON.stringify(this.reservations));
+          localStorage.setItem('waitlist', JSON.stringify(this.waitlist));
+          localStorage.setItem('staff', JSON.stringify(this.staff));
+        },
+        cleanupExpiredReservations() {
+          const today = moment().startOf('day');
+          this.reservations = this.reservations.filter(reservation => {
+            return moment(reservation.date).isSameOrAfter(today);
+          });
+          this.updateLocalStorage();
+        },
+        rotateWaiterSections() {
+          const waiters = this.staff.filter(member => member.role === 'waiter');
+          const sections = waiters.map(w => w.section);
+          waiters.forEach((waiter, index) => {
+            waiter.section = sections[(index + 1) % sections.length];
+          });
+          this.updateLocalStorage();
+        },
+        findReplacementStaff(absentStaffMember) {
+          const today = moment().format('dddd');
+          const offDutyStaff = this.staff.filter(member => 
+            member.status === 'Folga' && 
+            member.role === absentStaffMember.role &&
+            member.dayOff !== today
+          );
+          
+          if (offDutyStaff.length === 0) return null;
+          
+          offDutyStaff.sort((a, b) => {
+            const aDaysSinceWork = moment().diff(moment(a.lastWorkDay), 'days');
+            const bDaysSinceWork = moment().diff(moment(b.lastWorkDay), 'days');
+            return bDaysSinceWork - aDaysSinceWork;
+          });
+          
+          return offDutyStaff[0];
+        }
+      }
+    });
+  </script>
+</body></html>
